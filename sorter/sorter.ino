@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <MD_TCS230.h>
-#include "classifier.h"
 #include <Servo.h>
+#include "classifier.h"
 
 #define  S0_OUT  2
 #define  S1_OUT  3
@@ -9,115 +9,114 @@
 #define  S3_OUT  5
 MD_TCS230* ColorSensor;
 
-#define SDataPush_OUT 7
-#define SDisp_OUT 6
+#define SERVO_MM_PUSH_OUT 7
+// Waiting should be less than acting here. Fix push_mm if needed
+#define SERVO_MM_PUSH_STATE_WAITING 1000
+#define SERVO_MM_PUSH_STATE_ACTING  2000
+Servo ServoMMPush;
 
-Servo servo_data_push;
-Servo servo_disp;
+#define SERVO_GUTTER_OUT 6
+#define SERVO_GUTTER_STATE_MIN 1000
+#define SERVO_GUTTER_STATE_MAX 2300
+#define SERVO_GUTTER_SECTORS_COUNT 6
+Servo ServoGutter;
+
+#define MM_ITERATION_DELAY 1000
 
 void setup()
 {
     Serial.begin(115200);
     Serial.println("Started!");
 
-//    sensorData whiteCalibration;
-
-//    whiteCalibration.value[TCS230_RGB_R] = 113240;
-//    whiteCalibration.value[TCS230_RGB_G] = 106330;
-//    whiteCalibration.value[TCS230_RGB_B] = 132540;
-
-//    sensorData blackCalibration;
-//    blackCalibration.value[TCS230_RGB_R] = 29100;
-//    blackCalibration.value[TCS230_RGB_G] = 30150;
-//    blackCalibration.value[TCS230_RGB_B] = 35660;
-
-    ColorSensor = new MD_TCS230(S2_OUT, S3_OUT, S0_OUT, S1_OUT);
-    ColorSensor->begin();
-//    ColorSensor->setDarkCal(&blackCalibration);
-//    ColorSensor->setWhiteCal(&whiteCalibration);
-
-    pinMode(SDataPush_OUT, OUTPUT);
-    pinMode(SDisp_OUT, OUTPUT);
-    servo_data_push.attach(SDataPush_OUT);
-    servo_disp.attach(SDisp_OUT);
-    servo_data_push.write(1000);
+    pinMode(SERVO_MM_PUSH_OUT, OUTPUT);
+    ServoMMPush.attach(SERVO_MM_PUSH_OUT);
+    ServoMMPush.write(SERVO_MM_PUSH_STATE_WAITING);
+	
+	pinMode(SERVO_GUTTER_OUT, OUTPUT);
+    ServoGutter.attach(SERVO_GUTTER_OUT);
 }
 
 void loop() 
 {
-    sensorData rgb;
+	// Initialize color sensor
+	ColorSensor = new MD_TCS230(S2_OUT, S3_OUT, S0_OUT, S1_OUT);
+    ColorSensor->begin();
+	
+	// Reading data from color sensor
+    sensorData sd;
     ColorSensor->read();
     while (!ColorSensor->available())
         ;
-    ColorSensor->getRaw(&rgb);
-    ColorSensor->setEnable(true);
-    ColorSensor->setFilter(TCS230_RGB_X);
-   uint32_t x = ColorSensor->readSingle();
-    ColorSensor->setEnable(false);
-    int color = make_a_decision((float) rgb.value[TCS230_RGB_R], (float) rgb.value[TCS230_RGB_G], (float) rgb.value[TCS230_RGB_B], (float) x);
-    print_rgb(&rgb, x, color);
-
+    ColorSensor->getRaw(&sd);
+	uint32_t clean = read_clean();
+	
+	// Call generated classifier to detect m&m color
+	int color = make_a_decision((float) sd.value[TCS230_RGB_R], (float) sd.value[TCS230_RGB_G], (float) sd.value[TCS230_RGB_B], (float) clean);
+    print_debug_output(&sd, clean, color);
+	
+	// Delete color sensor. It somehow conflicts with servos and disposing helps
     delete ColorSensor;
-    servo_data_push.attach(SDataPush_OUT);
-    servo_disp.attach(SDisp_OUT);
-    //int color = yellow;
+	
+	// Initialize servos
+    ServoMMPush.attach(SERVO_MM_PUSH_OUT);
+    ServoGutter.attach(SERVO_GUTTER_OUT);
+	
+	// White means there is no m&m on sensor
+	// Used a color name to simplify python code generator
     if (color != white)
     {
-      
-    //for (int i = 0; i < 5; i++)
-      move_dispenser(color);
-      push_data();
-      
+      move_gutter(color);
+	  delay(100);
+      push_mm();
     }
-    //set_rgb_led(&rgb);
-    delay(1000);
-    servo_data_push.detach();
-    servo_disp.detach();
-    ColorSensor = new MD_TCS230(S2_OUT, S3_OUT, S0_OUT, S1_OUT);
-    ColorSensor->begin();
+	delay(MM_ITERATION_DELAY);
+    
+	// Dispose servos
+	ServoMMPush.detach();
+    ServoGutter.detach();
 }
 
-void push_data()
+uint32_t read_clean()
 {
-  //Serial.println("Pushing");
-  for (int i = 1000; i < 2000; i += 50)
+	ColorSensor->setEnable(true);
+    ColorSensor->setFilter(TCS230_RGB_X);
+	uint32_t clean = ColorSensor->readSingle();
+    ColorSensor->setEnable(false);
+	return clean;
+}
+
+void push_mm()
+{
+  Serial.println("Pushing");
+  for (int i = SERVO_MM_PUSH_STATE_WAITING; i < SERVO_MM_PUSH_STATE_ACTING; i += 50)
   {
-    servo_data_push.write(i);
+    ServoMMPush.write(i);
     delay(25);
   }
-  servo_data_push.write(1000);
-  delay(250);
+  ServoMMPush.write(SERVO_MM_PUSH_STATE_ACTING);
+  delay(25);
+  ServoMMPush.write(SERVO_MM_PUSH_STATE_WAITING);
 }
 
-void move_dispenser(int sector)
+void move_gutter(int sector)
 {
-  int min = 1000;
-  int max = 2300;
-  int sectorsCount = 6;
-  int value = min+sector*((max - min)/sectorsCount);
-  servo_disp.write(value);
-  Serial.print("Dispensing ");
-  Serial.println(value);
-  delay(500);
+	int oneSectorLen = (SERVO_GUTTER_STATE_MAX - SERVO_GUTTER_STATE_MIN)/SERVO_GUTTER_SECTORS_COUNT
+	int value = SERVO_GUTTER_STATE_MIN + sector*oneSectorLen;
+	ServoGutter.write(value);
+	Serial.print("Gutter moves to ");
+	Serial.println(value);
 }
 
-void print_rgb(sensorData* sd, uint32_t clean, int color)
+void print_debug_output(sensorData* sd, uint32_t clean, int color)
 {
 	Serial.print(sd->value[TCS230_RGB_R]);
 	Serial.print(" ");
 	Serial.print(sd->value[TCS230_RGB_G]);
 	Serial.print(" ");
 	Serial.print(sd->value[TCS230_RGB_B]);
-  Serial.print(" ");
-  Serial.print(clean);
-  Serial.print(" ");
-  Serial.print(color);
+	Serial.print(" ");
+	Serial.print(clean);
+	Serial.print(" ");
+	Serial.print(color);
 	Serial.println();
 }
-
-//void set_rgb_led(colorData* sd)
-//{
- //   analogWrite(R_OUT, 255 - sd->value[TCS230_RGB_R]);
-  //  analogWrite(G_OUT, 255 - sd->value[TCS230_RGB_G]);
-  //  analogWrite(B_OUT, 255 - sd->value[TCS230_RGB_B]);
-//}
