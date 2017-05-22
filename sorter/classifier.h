@@ -2,8 +2,8 @@
 #define	          green	 1
 #define	         orange	 2
 #define	            red	 3
-#define	          white	 4
-#define	         yellow	 5
+#define          yellow  4
+#define	          white	 5
 
 float check_if_it_is_blue_object(float r, float g, float b, float c)
     {
@@ -59,44 +59,81 @@ int make_a_decision(float r, float g, float b, float c)
         float max_value = -10000;
         float value;
         value = check_if_it_is_blue_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(0);
+        // Serial.print(": ");
+        // Serial.println(value);
         if (value > max_value)
         {
             max_id = 0;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
             max_value = value;
         }
     
         value = check_if_it_is_green_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(1);
+        // Serial.print(": ");
+        // Serial.println(value);
         if (value > max_value)
         {
             max_id = 1;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
             max_value = value;
         }
     
         value = check_if_it_is_orange_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(2);
+        // Serial.print(": ");
+        // Serial.println(value);
         if (value > max_value)
         {
             max_id = 2;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
             max_value = value;
         }
     
         value = check_if_it_is_red_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(3);
+        // Serial.print(": ");
+        // Serial.println(value);
         if (value > max_value)
         {
             max_id = 3;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
+            max_value = value;
+        }
+    
+        
+        value = check_if_it_is_yellow_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(4);
+        // Serial.print(": ");
+        // Serial.println(value);
+        if (value > max_value)
+        {
+            max_id = 4;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
             max_value = value;
         }
     
         value = check_if_it_is_white_object(r, g, b, c);
-        if (value > max_value)
-        {
-            max_id = 4;
-            max_value = value;
-        }
-    
-        value = check_if_it_is_yellow_object(r, g, b, c);
+        // Serial.print("	");
+        // Serial.print(5);
+        // Serial.print(": ");
+        // Serial.println(value);
         if (value > max_value)
         {
             max_id = 5;
+            // Serial.print("		 It is bigger than ");
+            // Serial.println(max_value);
             max_value = value;
         }
     
